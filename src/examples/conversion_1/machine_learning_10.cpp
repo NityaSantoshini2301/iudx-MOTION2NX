@@ -273,7 +273,7 @@ void read_test_data(std::vector<float>&test_input, std::vector<float>& test_inpu
   std::ifstream file;
   std::string path = home_dir + "/data/ImageProvider/images_actualanswer";
   std::string input_path;
-  int test_size = 100;
+  int test_size = 50;
 
   for (int i = 0; i < test_size; i++) {
     input_path = path + "/X" + std::to_string(i) + ".csv";
@@ -352,7 +352,7 @@ int test_accuracy(std::vector<std::uint64_t>theta, const Options& options) {
   int argmax = 0;
   std::vector<int>predictions;
   for(int i = 0; i < sigmoid_dp_transpose.size(); i++) {
-    if(i != 0 && i % 10 == 0) {
+    if(i != 0 && i % classes == 0) {
       predictions.push_back(argmax);
       max = -1;
       argmax = 0;
@@ -383,7 +383,7 @@ int test_accuracy(std::vector<std::uint64_t>theta, const Options& options) {
 }
 
 int main(int argc, char* argv[]) {
-  
+  auto start = std::chrono::high_resolution_clock::now();
   auto options = parse_program_options(argc, argv);
   std::vector<float> row_major_input, column_major_input;
 
@@ -457,5 +457,9 @@ int main(int argc, char* argv[]) {
   
   int accuracy = test_accuracy(theta_current, *options);
   std::cout << "\nAccuracy: " << accuracy << "\n";
+
+  auto end = std::chrono::high_resolution_clock::now();
+  auto duration = std::chrono::duration_cast<std::chrono::minutes>(end - start);
+  std::cout << "Time taken: " << duration.count() << " minutes" << std::endl;
   return EXIT_SUCCESS;
 }

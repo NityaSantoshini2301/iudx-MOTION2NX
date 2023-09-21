@@ -30,6 +30,7 @@ add_subdirectory(tensor_gt_mul)
 add_subdirectory(accuracy_testing)
 add_subdirectory(conversion_1)
 add_subdirectory(server)
+add_subdirectory(logistic_regression)
 
 if (MOTION_BUILD_ONNX_ADAPTER)
   add_subdirectory(onnx2motion)
