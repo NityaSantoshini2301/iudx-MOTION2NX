@@ -2,8 +2,9 @@ add_executable(readfile readfile.cpp)
 add_executable(appendfile appendfile.cpp)
 add_executable(machine_learning machine_learning.cpp)
 add_executable(machine_learning_10 machine_learning_10.cpp)
-add_executable(cnn_2layer cnn_2layer.cpp)
 add_executable(cnn cnn.cpp)
+add_executable(cnn_2layer cnn_2layer.cpp)
+add_executable(cnn_2layer_check cnn_2layer_check.cpp)
 add_executable(sharegen sharegen.cpp)
 add_executable(matrixmultiply_test matrixmultiply_test.cpp)
 
@@ -15,6 +16,7 @@ target_compile_features(machine_learning PRIVATE cxx_std_20)
 target_compile_features(machine_learning_10 PRIVATE cxx_std_20)
 target_compile_features(cnn PRIVATE cxx_std_20)
 target_compile_features(cnn_2layer PRIVATE cxx_std_20)
+target_compile_features(cnn_2layer_check PRIVATE cxx_std_20)
 target_compile_features(sharegen PRIVATE cxx_std_20)
 target_compile_features(matrixmultiply_test PRIVATE cxx_std_20)
 
@@ -54,6 +56,13 @@ target_link_libraries(cnn
 )
 
 target_link_libraries(cnn_2layer
+    MOTION::motion
+    Boost::json
+    Boost::log
+    Boost::program_options
+)
+
+target_link_libraries(cnn_2layer_check
     MOTION::motion
     Boost::json
     Boost::log

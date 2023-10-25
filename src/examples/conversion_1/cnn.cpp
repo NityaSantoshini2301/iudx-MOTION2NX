@@ -178,7 +178,7 @@ class SigmoidLayer {
     public:
     vector<uint64_t>input;
     vector<uint64_t>output;
-    vector<uint64_t>dLbydA;
+    vector<uint64_t>dLbydF;
     
     vector<uint64_t> forward_pass(vector<uint64_t>sigmoid_input) {
         input = sigmoid_input;
@@ -189,16 +189,21 @@ class SigmoidLayer {
     }
 
     vector<uint64_t> backward_pass(vector<uint64_t>dLbydX2) {
-        vector<uint64_t>sigmoid_diagonal_matrix(input.size() * input.size(), 0);
+        vector<uint64_t>dX2bydF(input.size(), 0);
         for(int i = 0; i < input.size(); i++) {
-            sigmoid_diagonal_matrix[i * input.size() + i] = MOTION::new_fixed_point::decode<std::uint64_t, float>(output[i] * (8192 - output[i]), 13);
+            dX2bydF[i] = MOTION::new_fixed_point::decode<std::uint64_t, float>(output[i] * (8192 - output[i]), 13);
         }
-        dLbydA = MOTION::matrix_multiply(1, 845, 845, dLbydX2, sigmoid_diagonal_matrix);
-        transform(dLbydA.begin(), dLbydA.end(), dLbydA.begin(),
+        dLbydF.assign(dLbydX2.size(), 0);
+
+        transform(std::begin(dLbydX2), std::end(dLbydX2),
+                    std::begin(dX2bydF), std::begin(dLbydF),
+                    std::multiplies{});
+
+        transform(dLbydF.begin(), dLbydF.end(), dLbydF.begin(),
                  [frac_bits](auto j) {
                    return MOTION::new_fixed_point::decode<std::uint64_t, float>(j, frac_bits);
                  });
-        return dLbydA;
+        return dLbydF;
     }
 
     uint64_t sigmoid(uint64_t dot_product, int frac_bits) {
@@ -220,6 +225,48 @@ class SigmoidLayer {
             return dot_product + encoded_threshold;
             }
         }
+    }
+};
+
+class ReluLayer {
+    public:
+    vector<uint64_t>input;
+    vector<uint64_t>output;
+    vector<uint64_t>dLbydF;
+
+    vector<uint64_t> forward_pass(vector<uint64_t>relu_input) {
+        input = relu_input;
+        output.assign(input.size(), 0);
+        transform(input.begin(), input.end(), output.begin(),
+                  [this, frac_bits] (uint64_t j)  { return this->relu(j); });
+        return output;
+    }
+
+    vector<uint64_t> backward_pass(vector<uint64_t>dLbydX2) {
+        vector<uint64_t>dX2bydF(input.size(), 0);
+        for(int i = 0; i < input.size(); i++) {
+            dX2bydF[i] = output[i] > 0? 1: 0;
+        }
+        dLbydF.assign(dLbydX2.size(), 0);
+
+        transform(std::begin(dLbydX2), std::end(dLbydX2),
+                    std::begin(dX2bydF), std::begin(dLbydF),
+                    std::multiplies{});
+
+        transform(dLbydF.begin(), dLbydF.end(), dLbydF.begin(),
+                 [frac_bits](auto j) {
+                   return MOTION::new_fixed_point::decode<std::uint64_t, float>(j, frac_bits);
+                 });
+        return dLbydF;
+    }
+    
+    uint64_t relu(uint64_t input) {
+        uint64_t msb = (uint64_t)1 << 63;
+        if (input & msb) {
+            return 0;
+        } else {
+            return input;
+        }   
     }
 };
 
@@ -284,7 +331,8 @@ class CNN {
     public:
     ConvolutionLayer cnn_layer1 = ConvolutionLayer();
     FlattenLayer flatten_layer = FlattenLayer();
-    SigmoidLayer sigmoid_layer1 = SigmoidLayer();
+    //SigmoidLayer sigmoid_layer1 = SigmoidLayer();
+    ReluLayer relu_layer1 = ReluLayer();
     FullyConnectedLayer fully_connected_layer1 = FullyConnectedLayer();
     SigmoidLayer sigmoid_layer2 = SigmoidLayer();
     vector<uint64_t>image;
@@ -346,7 +394,7 @@ class CNN {
         string input_path;
         input_path = path + "images_folder" + to_string(y) + "/X" + to_string(x) + ".csv";
         
-        cout << "\nInput path: " << input_path << "\n";
+        //cout << "\nInput path: " << input_path << "\n";
         file.open(input_path);
         string str;
         while (std::getline(file, str)) {
@@ -379,8 +427,8 @@ class CNN {
     void forward_pass() {
         vector<uint64_t>cnn_layer1_output = cnn_layer1.forward_pass(image, weights1);
         vector<uint64_t>flatten_layer_output = flatten_layer.forward_pass(cnn_layer1_output);        
-        vector<uint64_t>sigmoid_layer1_output = sigmoid_layer1.forward_pass(flatten_layer_output);
-        vector<uint64_t>fully_connected_layer1_output = fully_connected_layer1.forward_pass(sigmoid_layer1_output, weights2); 
+        vector<uint64_t>relu_layer1_output = relu_layer1.forward_pass(flatten_layer_output);
+        vector<uint64_t>fully_connected_layer1_output = fully_connected_layer1.forward_pass(relu_layer1_output, weights2); 
         vector<uint64_t>sigmoid_layer2_output = sigmoid_layer2.forward_pass(fully_connected_layer1_output);
        
         output = sigmoid_layer2_output;
@@ -432,17 +480,17 @@ class CNN {
     }
 
     void backward_pass() {
-        cout << "\nTarget: \n";
+        /*cout << "\nTarget: \n";
         for(int i = 0; i < target.size(); i++) {
             cout << MOTION::new_fixed_point::decode<uint64_t, float>(target[i], 13) << " ";
         }
         cout << "\nFoward pass output: \n";
         for(int i = 0; i < output.size(); i++) {
             cout << MOTION::new_fixed_point::decode<uint64_t, float>(output[i], 13) << " ";
-        }
+        }*/
         dLbydW2 = fully_connected_layer1.backward_pass(output, target, true, false);
         vector<uint64_t>dLbydX2 = fully_connected_layer1.backward_pass(output, target, false, true);
-        vector<uint64_t>dLbydF = sigmoid_layer1.backward_pass(dLbydX2);
+        vector<uint64_t>dLbydF = relu_layer1.backward_pass(dLbydX2);
         vector<uint64_t>dLbydZ = flatten_layer.backward_pass(dLbydF);
         dLbydW1 = cnn_layer1.backward_pass(dLbydZ);
         /*
@@ -535,7 +583,7 @@ class CNN {
     int get_test_input(int i) {
         string home_dir = getenv("BASE_DIR");
         ifstream file;
-        string path = home_dir + "/data/ImageProvider/images_actualanswer";
+        string path = home_dir + "/data/ImageProvider/labelled_test_data";
         string input_path;
         input_path = path + "/X" + std::to_string(i) + ".csv";
         vector<float>unencoded_input;
@@ -591,13 +639,13 @@ class CNN {
 
 int main(int argc, char* argv[]) {
     auto start = std::chrono::high_resolution_clock::now();
-    int iterations = 5000;
+    int iterations = 15000;
     int batch_size = 20;
     CNN cnn = CNN();    
     cnn.initialize_random_weights({5, 845}, {5, 10}, {1, 1}, {5, 1}); //rows, columns, channels, kernels
     cnn.set_batch_size(batch_size);
     for(int i = 0; i < iterations; i++) {
-        cout << "\nIteration: " << i << endl;
+        if(i % 100 == 0) cout << "\nIteration: " << i << endl;
         for(int j = 0; j < batch_size; j++) {
             cnn.get_input(i);
             cnn.get_target(i);
@@ -609,7 +657,7 @@ int main(int argc, char* argv[]) {
     }
     cout << "Testing: " << endl;
     int accuracy = 0;
-    for(int i = 0; i < 99; i++) {
+    for(int i = 1; i <= 5000; i++) {
         int test_label = cnn.get_test_input(i);
         cnn.forward_pass();
         int prediction = cnn.get_prediction();

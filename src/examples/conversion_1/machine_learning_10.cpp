@@ -1,4 +1,4 @@
-// ./bin/machine_learning --sample-file sample_file --actual-label-file actual_label
+// ./bin/machine_learning_10 --sample-file sample_file --actual-label-file actual_label
 // --fractional-bits 13 --sample-size 20 --classes 10
 //1000 - 80, 10000 - 91, 15000 - 94
 #include <algorithm>
@@ -271,11 +271,11 @@ void get_test_labels(std::vector<float>&test_labels, int test_size) {
 void read_test_data(std::vector<float>&test_input, std::vector<float>& test_input_transpose, std::vector<float>&test_labels) {
   std::string home_dir = getenv("BASE_DIR");
   std::ifstream file;
-  std::string path = home_dir + "/data/ImageProvider/images_actualanswer";
+  std::string path = home_dir + "/data/ImageProvider/labelled_test_data";
   std::string input_path;
-  int test_size = 50;
+  int test_size = 5000;
 
-  for (int i = 0; i < test_size; i++) {
+  for (int i = 1; i <= test_size; i++) {
     input_path = path + "/X" + std::to_string(i) + ".csv";
     file.open(input_path);
     std::string str;
@@ -392,9 +392,9 @@ int main(int argc, char* argv[]) {
 
   std::vector<std::uint64_t> theta_current;
 
-  int iterations = 20000;
-  for(int i=0;i<iterations;i++) { 
-    cout << i << endl;  
+  int iterations = 15000;
+  for(int i=0; i<iterations;i++) { 
+    if(i % 1000 == 0) cout << i << endl;  
     read_input(row_major_input,column_major_input,*options);
     int size_single_input=row_major_input.size()/options->m;
 
