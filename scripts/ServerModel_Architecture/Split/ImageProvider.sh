@@ -79,7 +79,8 @@ check_exit_statuses $?
 #-----------------------------------------     Reconstruction     -------------------------------------------------------#
 
 echo "Reconstruction Starts"
-$build_path/bin/Reconstruct --current-path $output_shares_path 
+#$build_path/bin/Reconstruct --current-path $output_shares_path 
+$build_path/bin/Reconstruct --current-path $output_shares_path --fractional-bits $fractional_bits
 pid1=$!
 wait $pid1
 check_exit_statuses $?

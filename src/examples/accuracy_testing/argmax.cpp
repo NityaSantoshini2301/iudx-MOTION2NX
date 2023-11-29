@@ -1,8 +1,16 @@
 /*
-./bin/argmax --my-id 0 --party 0,::1,7000 --party 1,::1,7001 --arithmetic-protocol
-beavy --boolean-protocol yao --repetitions 1 --config-filename file_config_input0 --config-input X
-./bin/argmax --my-id 1 --party 0,::1,7000 --party 1,::1,7001 --arithmetic-protocol
-beavy --boolean-protocol yao --repetitions 1 --config-filename file_config_input1 --config-input X
+./bin/argmax --my-id 1 --threads 1 --party 0,127.0.0.1,4009 --party 1,127.0.0.1,4010
+--arithmetic-protocol beavy --boolean-protocol beavy --repetitions 1 --config-filename
+file_config_input1 --config-input remote_image_shares --current-path
+${BASE_DIR}/build_debwithrelinfo_gcc
+
+./bin/argmax --my-id 0 --threads 1 --party 0,127.0.0.1,4009 --party
+1,127.0.0.1,4010 --arithmetic-protocol beavy --boolean-protocol beavy --repetitions 1
+--config-filename file_config_input0 --config-input remote_image_shares --current-path
+${BASE_DIR}/build_debwithrelinfo_gcc
+
+
+
 */
 // MIT License
 //
@@ -464,6 +472,7 @@ auto create_composite_circuit(const Options& options, MOTION::TwoPartyBackend& b
 
   // std::array<ENCRYPTO::ReusableFiberFuture<MOTION::BitValues>, 26>* outputbool =
   // new std::array<ENCRYPTO::ReusableFiberFuture<MOTION::BitValues>, 26>();
+
   std::vector<size_t> gate_ids(10);
   for (int i = 0; i < options.num_elements; i++) {
     // (*outputbool)[i] =

@@ -61,6 +61,11 @@ template <typename T>
 class MatrixMultiplicationLHS;
 template <typename T>
 class MatrixMultiplicationRHS;
+template <typename T>
+class HadamardMatrixMultiplicationLHS;
+template <typename T>
+class HadamardMatrixMultiplicationRHS;
+
 }  // namespace MOTION
 
 namespace MOTION::proto::beavy {
@@ -74,8 +79,8 @@ template <typename T>
 class ArithmeticBEAVYTensorInputSender : public NewGate {
  public:
   ArithmeticBEAVYTensorInputSender(std::size_t gate_id, BEAVYProvider&,
-                                 const tensor::TensorDimensions& dimensions,
-                                 ENCRYPTO::ReusableFiberFuture<std::vector<T>>&&);
+                                   const tensor::TensorDimensions& dimensions,
+                                   ENCRYPTO::ReusableFiberFuture<std::vector<T>>&&);
   bool need_setup() const noexcept override { return true; }
   bool need_online() const noexcept override { return true; }
   void evaluate_setup() override;
@@ -97,7 +102,7 @@ template <typename T>
 class ArithmeticBEAVYTensorInputReceiver : public NewGate {
  public:
   ArithmeticBEAVYTensorInputReceiver(std::size_t gate_id, BEAVYProvider&,
-                                   const tensor::TensorDimensions& dimensions);
+                                     const tensor::TensorDimensions& dimensions);
   bool need_setup() const noexcept override { return true; }
   bool need_online() const noexcept override { return true; }
   void evaluate_setup() override;
@@ -119,9 +124,9 @@ template <typename T>
 class ArithmeticBEAVYTensorInputShares : public NewGate {
  public:
   ArithmeticBEAVYTensorInputShares(std::size_t gate_id, BEAVYProvider&,
-                                 const tensor::TensorDimensions& dimensions,
-                                 ENCRYPTO::ReusableFiberFuture<std::vector<T>>&&,
-                                 ENCRYPTO::ReusableFiberFuture<std::vector<T>>&&);
+                                   const tensor::TensorDimensions& dimensions,
+                                   ENCRYPTO::ReusableFiberFuture<std::vector<T>>&&,
+                                   ENCRYPTO::ReusableFiberFuture<std::vector<T>>&&);
   bool need_setup() const noexcept override { return true; }
   bool need_online() const noexcept override { return true; }
   void evaluate_setup() override;
@@ -144,7 +149,7 @@ template <typename T>
 class ArithmeticBEAVYTensorOutput : public NewGate {
  public:
   ArithmeticBEAVYTensorOutput(std::size_t gate_id, BEAVYProvider&, ArithmeticBEAVYTensorCP<T>,
-                            std::size_t output_owner);
+                              std::size_t output_owner);
   bool need_setup() const noexcept override { return true; }
   bool need_online() const noexcept override { return true; }
   void evaluate_setup() override;
@@ -231,7 +236,33 @@ class ArithmeticBEAVYTensorGemm : public NewGate {
   std::unique_ptr<MOTION::MatrixMultiplicationLHS<T>> mm_lhs_side_;
 };
 
-//Implementation of Tensor Join (addnl)
+template <typename T>
+class ArithmeticBEAVYTensorHamm : public NewGate {
+ public:
+  ArithmeticBEAVYTensorHamm(std::size_t gate_id, BEAVYProvider&, tensor::HammOp,
+                            const ArithmeticBEAVYTensorCP<T> input_A,
+                            const ArithmeticBEAVYTensorCP<T> input_B, std::size_t fractional_bits);
+  ~ArithmeticBEAVYTensorHamm();
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  const ArithmeticBEAVYTensorP<T>& get_output_tensor() const { return output_; }
+
+ private:
+  BEAVYProvider& beavy_provider_;
+  tensor::HammOp hamm_op_;
+  std::size_t fractional_bits_;
+  const ArithmeticBEAVYTensorCP<T> input_A_;
+  const ArithmeticBEAVYTensorCP<T> input_B_;
+  std::shared_ptr<ArithmeticBEAVYTensor<T>> output_;
+  ENCRYPTO::ReusableFiberFuture<std::vector<T>> share_future_;
+  std::vector<T> Delta_y_share_;
+  std::unique_ptr<MOTION::HadamardMatrixMultiplicationRHS<T>> hm_rhs_side_;
+  std::unique_ptr<MOTION::HadamardMatrixMultiplicationLHS<T>> hm_lhs_side_;
+};
+
+// Implementation of Tensor Join (addnl)
 template <typename T>
 class ArithmeticBEAVYTensorJoin : public NewGate {
  public:
@@ -308,12 +339,12 @@ class ArithmeticBEAVYTensorAveragePool : public NewGate {
   std::vector<T> tmp_out_;
 };
 
-//Implementation of Tensor Negation (addnl)
+// Implementation of Tensor Negation (addnl)
 template <typename T>
 class ArithmeticBEAVYTensorNegate : public NewGate {
  public:
   ArithmeticBEAVYTensorNegate(std::size_t gate_id, BEAVYProvider&,
-                            const ArithmeticBEAVYTensorCP<T> input);
+                              const ArithmeticBEAVYTensorCP<T> input);
   ~ArithmeticBEAVYTensorNegate();
   bool need_setup() const noexcept override { return true; }
   bool need_online() const noexcept override { return true; }
@@ -331,13 +362,13 @@ class ArithmeticBEAVYTensorNegate : public NewGate {
   std::unique_ptr<MOTION::MatrixMultiplicationLHS<T>> mm_lhs_side_;
 };
 
-//Implementation of Constant(k) Multiplication with Tensor (addnl)
+// Implementation of Constant(k) Multiplication with Tensor (addnl)
 template <typename T>
 class ArithmeticBEAVYTensorConstMul : public NewGate {
  public:
-  ArithmeticBEAVYTensorConstMul(std::size_t gate_id, BEAVYProvider&,
-                            const std::vector<uint64_t> k,
-                            const ArithmeticBEAVYTensorCP<T> input);
+  ArithmeticBEAVYTensorConstMul(std::size_t gate_id, BEAVYProvider&, const std::vector<uint64_t> k,
+                                const ArithmeticBEAVYTensorCP<T> input,
+                                std::size_t fractional_bits);
   ~ArithmeticBEAVYTensorConstMul();
   bool need_setup() const noexcept override { return true; }
   bool need_online() const noexcept override { return true; }
@@ -348,12 +379,50 @@ class ArithmeticBEAVYTensorConstMul : public NewGate {
  private:
   BEAVYProvider& beavy_provider_;
   const ArithmeticBEAVYTensorCP<T> input_;
+  std::size_t fractional_bits_;
   const std::vector<uint64_t> constant_;
   std::shared_ptr<ArithmeticBEAVYTensor<T>> output_;
   ENCRYPTO::ReusableFiberFuture<std::vector<T>> share_future_;
   std::vector<T> Delta_y_;
   std::unique_ptr<MOTION::MatrixMultiplicationRHS<T>> mm_rhs_side_;
   std::unique_ptr<MOTION::MatrixMultiplicationLHS<T>> mm_lhs_side_;
+};
+//************************************************************************
+// Haritha cosnt matrix mult***** (Given model in clear to both parties and data the inform of
+// shares)
+template <typename T>
+class ArithmeticBEAVYTensorConstMatrixMul : public NewGate {
+ public:
+  ArithmeticBEAVYTensorConstMatrixMul(std::size_t gate_id, BEAVYProvider&, tensor::GemmOp,
+                                      const std::vector<uint64_t> k,
+                                      const ArithmeticBEAVYTensorCP<T> input,bool val,
+                                      const std::size_t fractional_bits);
+
+  ArithmeticBEAVYTensorConstMatrixMul(std::size_t gate_id, BEAVYProvider&, tensor::GemmOp,
+                                      const ArithmeticBEAVYTensorCP<T> input,
+                                      const std::vector<uint64_t> k, bool val,
+                                      const std::size_t fractional_bits);
+
+  ~ArithmeticBEAVYTensorConstMatrixMul();
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  const ArithmeticBEAVYTensorP<T>& get_output_tensor() const { return output_; }
+
+ private:
+  BEAVYProvider& beavy_provider_;
+  tensor::GemmOp gemm_op_;
+  const ArithmeticBEAVYTensorCP<T> input_;
+  const std::size_t fractional_bits_;
+  const std::vector<uint64_t> constant_;
+  std::shared_ptr<ArithmeticBEAVYTensor<T>> output_;
+  ENCRYPTO::ReusableFiberFuture<std::vector<T>> share_future_;
+  std::vector<T> Delta_y_;
+  bool type_;
+  // we dont need any OTs
+  // std::unique_ptr<MOTION::MatrixMultiplicationRHS<T>> mm_rhs_side_;
+  // std::unique_ptr<MOTION::MatrixMultiplicationLHS<T>> mm_lhs_side_;
 };
 
 
@@ -363,8 +432,8 @@ template <typename T>
 class ArithmeticBEAVYTensorConstAdd : public NewGate {
  public:
   ArithmeticBEAVYTensorConstAdd(std::size_t gate_id, BEAVYProvider&,
-                            const T k,
-                            const ArithmeticBEAVYTensorCP<T> input);
+                                const std::vector<std::uint64_t> k,
+                                const ArithmeticBEAVYTensorCP<T> input);
   ~ArithmeticBEAVYTensorConstAdd();
   bool need_setup() const noexcept override { return true; }
   bool need_online() const noexcept override { return true; }
@@ -375,7 +444,7 @@ class ArithmeticBEAVYTensorConstAdd : public NewGate {
  private:
   BEAVYProvider& beavy_provider_;
   const ArithmeticBEAVYTensorCP<T> input_;
-  const T constant_;
+  const std::vector<std::uint64_t> constant_;
   std::shared_ptr<ArithmeticBEAVYTensor<T>> output_;
   ENCRYPTO::ReusableFiberFuture<std::vector<T>> share_future_;
   std::vector<T> Delta_y_;
@@ -383,17 +452,15 @@ class ArithmeticBEAVYTensorConstAdd : public NewGate {
   std::unique_ptr<MOTION::MatrixMultiplicationLHS<T>> mm_lhs_side_;
 };
 
-
 //////////////////////////////////////////////////////////
 
-
-//Implementation of Tensor Addition (addnl)
+// Implementation of Tensor Addition (addnl)
 template <typename T>
 class ArithmeticBEAVYTensorAdd : public NewGate {
  public:
   ArithmeticBEAVYTensorAdd(std::size_t gate_id, BEAVYProvider&,
-                            const ArithmeticBEAVYTensorCP<T> inputA,
-                            const ArithmeticBEAVYTensorCP<T> inputB);
+                           const ArithmeticBEAVYTensorCP<T> inputA,
+                           const ArithmeticBEAVYTensorCP<T> inputB);
   ~ArithmeticBEAVYTensorAdd();
   bool need_setup() const noexcept override { return true; }
   bool need_online() const noexcept override { return true; }
@@ -412,12 +479,12 @@ class ArithmeticBEAVYTensorAdd : public NewGate {
   std::unique_ptr<MOTION::MatrixMultiplicationLHS<T>> mm_lhs_side_;
 };
 
-//Implementation of Splitting a Tensor (addnl)
+// Implementation of Splitting a Tensor (addnl)
 template <typename T>
 class ArithmeticBEAVYTensorSplit : public NewGate {
  public:
   ArithmeticBEAVYTensorSplit(std::size_t gate_id, BEAVYProvider&,
-                            const ArithmeticBEAVYTensorCP<T> input);
+                             const ArithmeticBEAVYTensorCP<T> input);
   ~ArithmeticBEAVYTensorSplit();
   bool need_setup() const noexcept override { return true; }
   bool need_online() const noexcept override { return true; }
@@ -438,11 +505,7 @@ class ArithmeticBEAVYTensorSplit : public NewGate {
   BEAVYProvider& beavy_provider_;
   const ArithmeticBEAVYTensorCP<T> input_;
   const tensor::TensorDimensions dimensions_ = {
-    .batch_size_ = 1,
-    .num_channels_ = 1,
-    .height_ = 1,
-    .width_ = 1
-  };
+      .batch_size_ = 1, .num_channels_ = 1, .height_ = 1, .width_ = 1};
   std::shared_ptr<ArithmeticBEAVYTensor<T>> output_0_;
   std::shared_ptr<ArithmeticBEAVYTensor<T>> output_1_;
   std::shared_ptr<ArithmeticBEAVYTensor<T>> output_2_;

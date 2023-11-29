@@ -51,13 +51,11 @@ file_config_model1 --actual-labels Actual_labels --current-path ${BASE_DIR}/buil
 #include <stdexcept>
 #include <thread>
 
-#include <algorithm>  // for copy() and assign()
 #include <boost/algorithm/string.hpp>
 #include <boost/json/serialize.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/log/trivial.hpp>
 #include <boost/program_options.hpp>
-#include <iterator>  // for back_inserter
 
 #include "algorithm/circuit_loader.h"
 #include "base/gate_factory.h"
@@ -541,7 +539,9 @@ auto create_composite_circuit(const Options& options, MOTION::TwoPartyTensorBack
   /////////////////////////////Sigmoid//////////////////////////////////
 
   std::function<MOTION::tensor::TensorCP(const MOTION::tensor::TensorCP&)> make_activation,
-      make_relu, make_sigmoid;
+      make_relu;
+  std::function<MOTION::tensor::TensorCP(const MOTION::tensor::TensorCP&, std::size_t)>
+      make_sigmoid;
 
   make_activation = [&](const auto& input) {
     //  const auto negated_tensor = arithmetic_tof.make_tensor_negate(input);
@@ -550,14 +550,17 @@ auto create_composite_circuit(const Options& options, MOTION::TwoPartyTensorBack
     return boolean_tof.make_tensor_conversion(options.arithmetic_protocol, relu_tensor);
   };
 
-  make_sigmoid = [&](const auto& input) {
+  make_sigmoid = [&](const auto& input, std::size_t input_size) {
     //  const auto negated_tensor = arithmetic_tof.make_tensor_negate(input);
-    const auto input_const_add = arithmetic_tof.make_tensor_constAdd_op(
-        input, MOTION::new_fixed_point::encode<uint64_t, float>(-0.5, options.fractional_bits));
+    const std::vector<uint64_t> constant_vector1(
+        input_size,
+        MOTION::new_fixed_point::encode<uint64_t, float>(-0.5, options.fractional_bits));
+    const auto input_const_add = arithmetic_tof.make_tensor_constAdd_op(input, constant_vector1);
     const auto first_relu_output = make_activation(input_const_add);
-    const auto input_const_add2 = arithmetic_tof.make_tensor_constAdd_op(
-        first_relu_output,
-        MOTION::new_fixed_point::encode<uint64_t, float>(1, options.fractional_bits));
+    const std::vector<uint64_t> constant_vector2(
+        input_size, MOTION::new_fixed_point::encode<uint64_t, float>(1, options.fractional_bits));
+    const auto input_const_add2 =
+        arithmetic_tof.make_tensor_constAdd_op(first_relu_output, constant_vector2);
     const auto negated_tensor = arithmetic_tof.make_tensor_negate(input_const_add2);
     const auto final_relu_output = make_activation(negated_tensor);
     return arithmetic_tof.make_tensor_negate(final_relu_output);
@@ -567,7 +570,7 @@ auto create_composite_circuit(const Options& options, MOTION::TwoPartyTensorBack
   std::cout << "Gemm operation starts \n";
   gemm_output1 =
       arithmetic_tof.make_tensor_gemm_op(gemm_op1, tensor_theta, tensor_X, options.fractional_bits);
-  auto sigmoid_tensor = make_sigmoid(gemm_output1);
+  auto sigmoid_tensor = make_sigmoid(gemm_output1, gemm_op1.compute_output_size());
   auto negated_Y = arithmetic_tof.make_tensor_negate(tensor_Y);
   auto tensor_H = arithmetic_tof.make_tensor_add_op(sigmoid_tensor, negated_Y);
   auto HX_tensor = arithmetic_tof.make_tensor_gemm_op(gemm_op2, tensor_H, tensor_Xtranspose,
@@ -578,7 +581,8 @@ auto create_composite_circuit(const Options& options, MOTION::TwoPartyTensorBack
   std::cout << "Encoded alpha m:" << encoded_alpham << "\n";
   std::vector<uint64_t> constant_vector(gemmop1_dims.height_ * options.Xtranspose.col,
                                         encoded_alpham);
-  auto HX_alpham_tensor = arithmetic_tof.make_tensor_constMul_op(HX_tensor, constant_vector);
+  auto HX_alpham_tensor =
+      arithmetic_tof.make_tensor_constMul_op(HX_tensor, constant_vector, options.fractional_bits);
   auto negated_HX_alpham_tensor = arithmetic_tof.make_tensor_negate(HX_alpham_tensor);
   auto Updated_theta = arithmetic_tof.make_tensor_add_op(tensor_theta, negated_HX_alpham_tensor);
   std::cout << "Gemm operation ends \n";

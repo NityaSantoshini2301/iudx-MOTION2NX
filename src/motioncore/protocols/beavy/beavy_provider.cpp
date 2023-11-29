@@ -171,8 +171,8 @@ ENCRYPTO::ReusableFiberFuture<BitValues> BEAVYProvider::make_boolean_output_gate
   return future;
 }
 
-std::size_t BEAVYProvider::make_boolean_output_gate_my_wo_getting_output(
-    std::size_t output_owner, const WireVector& in) {
+std::size_t BEAVYProvider::make_boolean_output_gate_my_wo_getting_output(std::size_t output_owner,
+                                                                         const WireVector& in) {
   if (output_owner != ALL_PARTIES && output_owner != my_id_) {
     throw std::logic_error("trying to create output gate for wrong party");
   }
@@ -205,7 +205,7 @@ BEAVYProvider::basic_make_arithmetic_input_gate_my(std::size_t input_owner, std:
   }
   ENCRYPTO::ReusableFiberPromise<std::vector<T>> promise;
   auto gate_id = gate_register_.get_next_gate_id();
-  auto gate = std::make_unique<ArithmeticBEAVYInputGateSender<T>>(gate_id, *this, num_simd, 
+  auto gate = std::make_unique<ArithmeticBEAVYInputGateSender<T>>(gate_id, *this, num_simd,
                                                                   promise.get_future());
   auto output = gate->get_output_wire();
   gate_register_.register_gate(std::move(gate));
@@ -260,14 +260,14 @@ WireVector BEAVYProvider::make_arithmetic_64_input_gate_other(std::size_t input_
   return basic_make_arithmetic_input_gate_other<std::uint64_t>(input_owner, num_simd);
 }
 
-//Input gates to take shares directly
+// Input gates to take shares directly
 template <typename T>
-std::pair<std::vector<ENCRYPTO::ReusableFiberPromise<MOTION::IntegerValues<T>>>, WireVector >
+std::pair<std::vector<ENCRYPTO::ReusableFiberPromise<MOTION::IntegerValues<T>>>, WireVector>
 BEAVYProvider::basic_make_arithmetic_input_gate_shares(std::size_t num_simd) {
   auto gate_id = gate_register_.get_next_gate_id();
   ENCRYPTO::ReusableFiberPromise<std::vector<T>> DeltaPromise, deltaPromise;
-  auto gate = std::make_unique<ArithmeticBEAVYInputGateShares<T>>(gate_id, *this, num_simd,
-                                                                  DeltaPromise.get_future(),deltaPromise.get_future());
+  auto gate = std::make_unique<ArithmeticBEAVYInputGateShares<T>>(
+      gate_id, *this, num_simd, DeltaPromise.get_future(), deltaPromise.get_future());
   auto output = gate->get_output_wire();
   gate_register_.register_gate(std::move(gate));
 
@@ -275,30 +275,28 @@ BEAVYProvider::basic_make_arithmetic_input_gate_shares(std::size_t num_simd) {
   input_promises.push_back(std::move(DeltaPromise));
   input_promises.push_back(std::move(deltaPromise));
 
-
-  return {std::move(input_promises),{cast_arith_wire(std::move(output))}};
+  return {std::move(input_promises), {cast_arith_wire(std::move(output))}};
 }
 
-std::pair<std::vector<ENCRYPTO::ReusableFiberPromise<MOTION::IntegerValues<uint8_t>>>, WireVector >
+std::pair<std::vector<ENCRYPTO::ReusableFiberPromise<MOTION::IntegerValues<uint8_t>>>, WireVector>
 BEAVYProvider::make_arithmetic_8_input_gate_shares(std::size_t num_simd) {
   return basic_make_arithmetic_input_gate_shares<std::uint8_t>(num_simd);
 }
 
-std::pair<std::vector<ENCRYPTO::ReusableFiberPromise<MOTION::IntegerValues<uint16_t>>>, WireVector >
+std::pair<std::vector<ENCRYPTO::ReusableFiberPromise<MOTION::IntegerValues<uint16_t>>>, WireVector>
 BEAVYProvider::make_arithmetic_16_input_gate_shares(std::size_t num_simd) {
   return basic_make_arithmetic_input_gate_shares<std::uint16_t>(num_simd);
 }
 
-std::pair<std::vector<ENCRYPTO::ReusableFiberPromise<MOTION::IntegerValues<uint32_t>>>, WireVector >
+std::pair<std::vector<ENCRYPTO::ReusableFiberPromise<MOTION::IntegerValues<uint32_t>>>, WireVector>
 BEAVYProvider::make_arithmetic_32_input_gate_shares(std::size_t num_simd) {
   return basic_make_arithmetic_input_gate_shares<std::uint32_t>(num_simd);
 }
 
-std::pair<std::vector<ENCRYPTO::ReusableFiberPromise<MOTION::IntegerValues<uint64_t>>>, WireVector >
+std::pair<std::vector<ENCRYPTO::ReusableFiberPromise<MOTION::IntegerValues<uint64_t>>>, WireVector>
 BEAVYProvider::make_arithmetic_64_input_gate_shares(std::size_t num_simd) {
   return basic_make_arithmetic_input_gate_shares<std::uint64_t>(num_simd);
 }
-
 
 template <typename T>
 ENCRYPTO::ReusableFiberFuture<IntegerValues<T>> BEAVYProvider::basic_make_arithmetic_output_gate_my(
@@ -898,31 +896,33 @@ tensor::TensorCP BEAVYProvider::make_arithmetic_64_tensor_input_other(
   return basic_make_arithmetic_tensor_input_other<std::uint64_t>(dims);
 }
 
-//Input tensor to take shares directly
+// Input tensor to take shares directly
 
 template <typename T>
-std::pair<std::vector<ENCRYPTO::ReusableFiberPromise<MOTION::IntegerValues<T>>>, tensor::TensorCP >
+std::pair<std::vector<ENCRYPTO::ReusableFiberPromise<MOTION::IntegerValues<T>>>, tensor::TensorCP>
 BEAVYProvider::basic_make_arithmetic_tensor_input_shares(const tensor::TensorDimensions& dims) {
-  ENCRYPTO::ReusableFiberPromise<std::vector<T>> Delta,delta;
+  ENCRYPTO::ReusableFiberPromise<std::vector<T>> Delta, delta;
   auto gate_id = gate_register_.get_next_gate_id();
-  auto tensor_op = std::make_unique<ArithmeticBEAVYTensorInputShares<T>>(gate_id, *this, dims,Delta.get_future(),delta.get_future());
-
+  auto tensor_op = std::make_unique<ArithmeticBEAVYTensorInputShares<T>>(
+      gate_id, *this, dims, Delta.get_future(), delta.get_future());
 
   std::vector<ENCRYPTO::ReusableFiberPromise<MOTION::IntegerValues<T>>> input_promises;
   input_promises.push_back(std::move(Delta));
   input_promises.push_back(std::move(delta));
-                                                                  
+
   auto output = tensor_op->get_output_tensor();
   gate_register_.register_gate(std::move(tensor_op));
   return {std::move(input_promises), std::dynamic_pointer_cast<const tensor::Tensor>(output)};
 }
 
-std::pair<std::vector<ENCRYPTO::ReusableFiberPromise<MOTION::IntegerValues<uint32_t>>>, tensor::TensorCP >
+std::pair<std::vector<ENCRYPTO::ReusableFiberPromise<MOTION::IntegerValues<uint32_t>>>,
+          tensor::TensorCP>
 BEAVYProvider::make_arithmetic_32_tensor_input_shares(const tensor::TensorDimensions& dims) {
   return basic_make_arithmetic_tensor_input_shares<std::uint32_t>(dims);
 }
 
-std::pair<std::vector<ENCRYPTO::ReusableFiberPromise<MOTION::IntegerValues<uint64_t>>>, tensor::TensorCP >
+std::pair<std::vector<ENCRYPTO::ReusableFiberPromise<MOTION::IntegerValues<uint64_t>>>,
+          tensor::TensorCP>
 BEAVYProvider::make_arithmetic_64_tensor_input_shares(const tensor::TensorDimensions& dims) {
   return basic_make_arithmetic_tensor_input_shares<std::uint64_t>(dims);
 }
@@ -1119,6 +1119,51 @@ tensor::TensorCP BEAVYProvider::make_tensor_gemm_op(const tensor::GemmOp& gemm_o
   return output;
 }
 
+// Added by Nitya and Vishnu
+// Hadamard product - both the inputs are in shares and element wise product of both matrices.
+tensor::TensorCP BEAVYProvider::make_tensor_hamm_op(const tensor::HammOp& hamm_op,
+                                                    const tensor::TensorCP input_A,
+                                                    const tensor::TensorCP input_B,
+                                                    std::size_t fractional_bits) {
+  if (!hamm_op.verify()) {
+    throw std::invalid_argument("invalid HammOp");
+  }
+  if (input_A->get_dimensions() != hamm_op.get_input_A_tensor_dims()) {
+    throw std::invalid_argument("invalid input_A dimensions");
+  }
+  if (input_B->get_dimensions() != hamm_op.get_input_B_tensor_dims()) {
+    throw std::invalid_argument("invalid input_B dimensions");
+  }
+  auto bit_size = input_A->get_bit_size();
+  if (bit_size != input_B->get_bit_size()) {
+    throw std::invalid_argument("bit size mismatch");
+  }
+  std::unique_ptr<NewGate> gate;
+  auto gate_id = gate_register_.get_next_gate_id();
+  tensor::TensorCP output;
+  const auto make_op = [this, input_A, hamm_op, input_B, fractional_bits, gate_id,
+                        &output](auto dummy_arg) {
+    using T = decltype(dummy_arg);
+    auto tensor_op = std::make_unique<ArithmeticBEAVYTensorHamm<T>>(
+        gate_id, *this, hamm_op, std::dynamic_pointer_cast<const ArithmeticBEAVYTensor<T>>(input_A),
+        std::dynamic_pointer_cast<const ArithmeticBEAVYTensor<T>>(input_B), fractional_bits);
+    output = tensor_op->get_output_tensor();
+    return tensor_op;
+  };
+  switch (bit_size) {
+    case 32:
+      gate = make_op(std::uint32_t{});
+      break;
+    case 64:
+      gate = make_op(std::uint64_t{});
+      break;
+    default:
+      throw std::logic_error(fmt::format("unexpected bit size {}", bit_size));
+  }
+  gate_register_.register_gate(std::move(gate));
+  return output;
+}
+
 tensor::TensorCP BEAVYProvider::make_tensor_sqr_op(const tensor::TensorCP input,
                                                    std::size_t fractional_bits) {
   auto bit_size = input->get_bit_size();
@@ -1186,7 +1231,7 @@ tensor::TensorCP BEAVYProvider::make_tensor_relu_op(const tensor::TensorCP in) {
   gate_register_.register_gate(std::move(tensor_op));
   return output;
 }
-
+///
 template <typename T>
 tensor::TensorCP BEAVYProvider::basic_make_tensor_relu_op(const tensor::TensorCP in_bool,
                                                           const tensor::TensorCP in_arith) {
@@ -1243,8 +1288,7 @@ tensor::TensorCP BEAVYProvider::make_tensor_negate(const tensor::TensorCP in) {
   std::unique_ptr<NewGate> gate;
   auto gate_id = gate_register_.get_next_gate_id();
   tensor::TensorCP output;
-  const auto make_op = [this, in, gate_id,
-                        &output](auto dummy_arg) {
+  const auto make_op = [this, in, gate_id, &output](auto dummy_arg) {
     using T = decltype(dummy_arg);
     auto tensor_op = std::make_unique<ArithmeticBEAVYTensorNegate<T>>(
         gate_id, *this, std::dynamic_pointer_cast<const ArithmeticBEAVYTensor<T>>(in));
@@ -1263,30 +1307,21 @@ tensor::TensorCP BEAVYProvider::make_tensor_negate(const tensor::TensorCP in) {
   }
   gate_register_.register_gate(std::move(gate));
   return output;
-
 }
 
 //(addnl)
-tensor::TensorCP BEAVYProvider::make_tensor_constMul_op(const tensor::TensorCP in,const std::vector<uint64_t> k) {
-  //std::cout<<"The constant inside the function:" <<k<<"\n";
-  for_each(k.begin(),
-             k.end(),
-             [](const auto& elem) {
- 
-                 // printing one by one element
-                 // separated with space
-                 std::cout << elem << " ";
-             });
- 
+tensor::TensorCP BEAVYProvider::make_tensor_constMul_op(const tensor::TensorCP in,
+                                                        const std::vector<uint64_t> k,
+                                                        std::size_t fractional_bits) {
   auto bit_size = in->get_bit_size();
   std::unique_ptr<NewGate> gate;
   auto gate_id = gate_register_.get_next_gate_id();
   tensor::TensorCP output;
-  const auto make_op = [this, in, gate_id, k,
-                        &output](auto dummy_arg) {
+  const auto make_op = [this, in, gate_id, k, fractional_bits, &output](auto dummy_arg) {
     using T = decltype(dummy_arg);
     auto tensor_op = std::make_unique<ArithmeticBEAVYTensorConstMul<T>>(
-        gate_id, *this, k, std::dynamic_pointer_cast<const ArithmeticBEAVYTensor<T>>(in));
+        gate_id, *this, k, std::dynamic_pointer_cast<const ArithmeticBEAVYTensor<T>>(in),
+        fractional_bits);
     output = tensor_op->get_output_tensor();
     return tensor_op;
   };
@@ -1302,19 +1337,111 @@ tensor::TensorCP BEAVYProvider::make_tensor_constMul_op(const tensor::TensorCP i
   }
   gate_register_.register_gate(std::move(gate));
   return output;
+}
+//************************************************************************
+// Haritha cosnt matrix mult***** (Given model in clear to both parties and data the inform of
+// shares)
+// The following function does constant * tensor
 
+tensor::TensorCP BEAVYProvider::make_tensor_constMatrix_Mul_op(const tensor::GemmOp& gemm_op,
+                                                               const std::vector<uint64_t> k,
+                                                               const tensor::TensorCP in, bool val,
+                                                               const std::size_t fractional_bits) {
+  if (!gemm_op.verify()) {
+    throw std::invalid_argument("invalid Const Matrix mutiplication");
+  }
+  if (k.size() != gemm_op.compute_input_A_size()) {
+    throw std::invalid_argument("invalid input_A dimensions");
+  }
+  if (in->get_dimensions() != gemm_op.get_input_B_tensor_dims()) {
+    throw std::invalid_argument("invalid input_B dimensions");
+  }
+  auto bit_size = in->get_bit_size();
+  std::unique_ptr<NewGate> gate;
+
+  auto gate_id = gate_register_.get_next_gate_id();
+  tensor::TensorCP output;
+  const auto make_op = [this, gemm_op, in, gate_id, k, fractional_bits, &output,
+                        val](auto dummy_arg) {
+    using T = decltype(dummy_arg);
+    // std :: cout << "*** 1365 : Beavyprovider.cpp before ArithmeticBEAVYTensorConstMatrixMul \n";
+    auto tensor_op = std::make_unique<ArithmeticBEAVYTensorConstMatrixMul<T>>(
+        gate_id, *this, gemm_op, k, std::dynamic_pointer_cast<const ArithmeticBEAVYTensor<T>>(in),
+        val, fractional_bits);
+    output = tensor_op->get_output_tensor();
+    // std :: cout << "**** 1371 : Beavyprovider.cpp before ArithmeticBEAVYTensorConstMatrixMul \n";
+    return tensor_op;
+  };
+  switch (bit_size) {
+    case 32:
+      gate = make_op(std::uint32_t{});
+      break;
+    case 64:
+      gate = make_op(std::uint64_t{});
+      break;
+    default:
+      throw std::logic_error(fmt::format("unexpected bit size {}", bit_size));
+  }
+  gate_register_.register_gate(std::move(gate));
+  return output;
 }
 
+// The following function does tensor * constant
+tensor::TensorCP BEAVYProvider::make_tensor_constMatrix_Mul_op(const tensor::GemmOp& gemm_op,
+                                                               const tensor::TensorCP in,
+                                                               const std::vector<uint64_t> k,
+                                                               bool val,
+                                                               const std::size_t fractional_bits) {
+  if (!gemm_op.verify()) {
+    throw std::invalid_argument("invalid Const Matrix mutiplication");
+  }
+  if (k.size() != gemm_op.compute_input_B_size()) {
+    throw std::invalid_argument("invalid input_A dimensions");
+  }
+  if (in->get_dimensions() != gemm_op.get_input_A_tensor_dims()) {
+    throw std::invalid_argument("invalid input_B dimensions");
+  }
+  auto bit_size = in->get_bit_size();
+  std::unique_ptr<NewGate> gate;
 
-//New function added by Ramya, July 19
+  auto gate_id = gate_register_.get_next_gate_id();
+  tensor::TensorCP output;
+  const auto make_op = [this, gemm_op, in, gate_id, k, fractional_bits, &output,
+                        val](auto dummy_arg) {
+    using T = decltype(dummy_arg);
+    // std :: cout << "*** 1365 : Beavyprovider.cpp before ArithmeticBEAVYTensorConstMatrixMul\n";
+    auto tensor_op = std::make_unique<ArithmeticBEAVYTensorConstMatrixMul<T>>(
+        gate_id, *this, gemm_op, std::dynamic_pointer_cast<const ArithmeticBEAVYTensor<T>>(in), k,
+        val, fractional_bits);
+    output = tensor_op->get_output_tensor();
+    // std :: cout << "**** 1371 : Beavyprovider.cpp before ArithmeticBEAVYTensorConstMatrixMul\n";
+    return tensor_op;
+  };
+  switch (bit_size) {
+    case 32:
+      gate = make_op(std::uint32_t{});
+      break;
+    case 64:
+      gate = make_op(std::uint64_t{});
+      break;
+    default:
+      throw std::logic_error(fmt::format("unexpected bit size {}", bit_size));
+  }
+  gate_register_.register_gate(std::move(gate));
+  return output;
+}
+
+//************************************************************************
+
+// New function added by Ramya, July 19
 //(addnl)
-tensor::TensorCP BEAVYProvider::make_tensor_constAdd_op(const tensor::TensorCP in,const uint64_t k) {
+tensor::TensorCP BEAVYProvider::make_tensor_constAdd_op(const tensor::TensorCP in,
+                                                        const std::vector<uint64_t> k) {
   auto bit_size = in->get_bit_size();
   std::unique_ptr<NewGate> gate;
   auto gate_id = gate_register_.get_next_gate_id();
   tensor::TensorCP output;
-  const auto make_op = [this, in, gate_id, k,
-                        &output](auto dummy_arg) {
+  const auto make_op = [this, in, gate_id, k, &output](auto dummy_arg) {
     using T = decltype(dummy_arg);
     auto tensor_op = std::make_unique<ArithmeticBEAVYTensorConstAdd<T>>(
         gate_id, *this, k, std::dynamic_pointer_cast<const ArithmeticBEAVYTensor<T>>(in));
@@ -1333,20 +1460,19 @@ tensor::TensorCP BEAVYProvider::make_tensor_constAdd_op(const tensor::TensorCP i
   }
   gate_register_.register_gate(std::move(gate));
   return output;
-
 }
 
 //(addnl)
-tensor::TensorCP BEAVYProvider::make_tensor_add_op(const tensor::TensorCP inputA,const tensor::TensorCP inputB) {
+tensor::TensorCP BEAVYProvider::make_tensor_add_op(const tensor::TensorCP inputA,
+                                                   const tensor::TensorCP inputB) {
   auto bit_size = inputA->get_bit_size();
   std::unique_ptr<NewGate> gate;
   auto gate_id = gate_register_.get_next_gate_id();
   tensor::TensorCP output;
-  const auto make_op = [this, inputA, inputB, gate_id,
-                        &output](auto dummy_arg) {
+  const auto make_op = [this, inputA, inputB, gate_id, &output](auto dummy_arg) {
     using T = decltype(dummy_arg);
     auto tensor_op = std::make_unique<ArithmeticBEAVYTensorAdd<T>>(
-        gate_id, *this, std::dynamic_pointer_cast<const ArithmeticBEAVYTensor<T>>(inputA) ,
+        gate_id, *this, std::dynamic_pointer_cast<const ArithmeticBEAVYTensor<T>>(inputA),
         std::dynamic_pointer_cast<const ArithmeticBEAVYTensor<T>>(inputB));
     output = tensor_op->get_output_tensor();
     return tensor_op;
@@ -1363,7 +1489,6 @@ tensor::TensorCP BEAVYProvider::make_tensor_add_op(const tensor::TensorCP inputA
   }
   gate_register_.register_gate(std::move(gate));
   return output;
-
 }
 
 //(addnl)
@@ -1372,8 +1497,7 @@ std::vector<tensor::TensorCP> BEAVYProvider::make_tensor_split_op(const tensor::
   std::unique_ptr<NewGate> gate;
   auto gate_id = gate_register_.get_next_gate_id();
   std::vector<tensor::TensorCP> output;
-  const auto make_op = [this, in, gate_id,
-                        &output](auto dummy_arg) {
+  const auto make_op = [this, in, gate_id, &output](auto dummy_arg) {
     using T = decltype(dummy_arg);
     auto tensor_op = std::make_unique<ArithmeticBEAVYTensorSplit<T>>(
         gate_id, *this, std::dynamic_pointer_cast<const ArithmeticBEAVYTensor<T>>(in));
@@ -1401,7 +1525,6 @@ std::vector<tensor::TensorCP> BEAVYProvider::make_tensor_split_op(const tensor::
   }
   gate_register_.register_gate(std::move(gate));
   return output;
-
 }
 
 tensor::TensorCP BEAVYProvider::make_tensor_join_op(const tensor::JoinOp& join_op,

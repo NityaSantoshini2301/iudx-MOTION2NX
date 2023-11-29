@@ -56,9 +56,9 @@ class TensorOpFactory {
   virtual TensorCP make_arithmetic_64_tensor_input_other(const TensorDimensions&);
 
   // share inputs
-  virtual std::pair<std::vector<ENCRYPTO::ReusableFiberPromise<IntegerValues<uint32_t>>>, TensorCP >
+  virtual std::pair<std::vector<ENCRYPTO::ReusableFiberPromise<IntegerValues<uint32_t>>>, TensorCP>
   make_arithmetic_32_tensor_input_shares(const TensorDimensions&);
-  virtual std::pair<std::vector<ENCRYPTO::ReusableFiberPromise<IntegerValues<uint64_t>>>, TensorCP >
+  virtual std::pair<std::vector<ENCRYPTO::ReusableFiberPromise<IntegerValues<uint64_t>>>, TensorCP>
   make_arithmetic_64_tensor_input_shares(const TensorDimensions&);
 
   // arithmetic outputs
@@ -86,6 +86,10 @@ class TensorOpFactory {
                                                const tensor::TensorCP input_A,
                                                const tensor::TensorCP input_B,
                                                std::size_t truncate_bits = 0);
+  virtual tensor::TensorCP make_tensor_hamm_op(const tensor::HammOp& hamm_op,
+                                               const tensor::TensorCP input_A,
+                                               const tensor::TensorCP input_B,
+                                               std::size_t truncate_bits = 0);
   virtual tensor::TensorCP make_tensor_sqr_op(const tensor::TensorCP input,
                                               std::size_t truncate_bits = 0);
   virtual tensor::TensorCP make_tensor_relu_op(const tensor::TensorCP input);
@@ -96,18 +100,33 @@ class TensorOpFactory {
   virtual tensor::TensorCP make_tensor_avgpool_op(const tensor::AveragePoolOp& avgpool_op,
                                                   const tensor::TensorCP input,
                                                   std::size_t truncate_bits);
-  virtual tensor::TensorCP make_tensor_negate(const tensor::TensorCP);   
-  virtual tensor::TensorCP make_tensor_constMul_op(const tensor::TensorCP,const std::vector<uint64_t> k);
-  virtual tensor::TensorCP make_tensor_constAdd_op(const tensor::TensorCP,const uint64_t k);
-  virtual tensor::TensorCP make_tensor_add_op(const tensor::TensorCP,const tensor::TensorCP);
+  virtual tensor::TensorCP make_tensor_negate(const tensor::TensorCP);
+
+  virtual tensor::TensorCP make_tensor_constMul_op(const tensor::TensorCP,
+                                                   const std::vector<uint64_t> k,
+                                                   std::size_t truncate_bits);
+
+  // Haritha cosnt matrix mult***** (Given model in clear to both parties and data the inform of
+  // shares)
+  virtual tensor::TensorCP make_tensor_constMatrix_Mul_op(const tensor::GemmOp& gemm_op,
+                                                          const std::vector<uint64_t> W,
+                                                          const tensor::TensorCP X,bool val,
+                                                          const std::size_t fractional_bits);
+  virtual tensor::TensorCP make_tensor_constMatrix_Mul_op(const tensor::GemmOp& gemm_op,
+                                                          const tensor::TensorCP X,
+                                                          const std::vector<uint64_t> W, bool val,
+                                                          const std::size_t fractional_bits);
+
+  virtual tensor::TensorCP make_tensor_constAdd_op(const tensor::TensorCP,
+                                                   const std::vector<uint64_t> k);
+  virtual tensor::TensorCP make_tensor_add_op(const tensor::TensorCP, const tensor::TensorCP);
   virtual std::vector<tensor::TensorCP> make_tensor_split_op(const tensor::TensorCP);
   virtual tensor::TensorCP make_tensor_gt_op(const tensor::MaxPoolOp& maxpool_op,
-                                                  const tensor::TensorCP input);
+                                             const tensor::TensorCP input);
   virtual tensor::TensorCP make_tensor_join_op(const tensor::JoinOp& join_op,
                                                const tensor::TensorCP input_A,
                                                const tensor::TensorCP input_B,
                                                std::size_t truncate_bits = 0);
-                                               
 };
 
 }  // namespace MOTION::tensor

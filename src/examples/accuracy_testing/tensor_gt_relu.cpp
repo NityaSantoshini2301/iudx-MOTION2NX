@@ -7,11 +7,13 @@ output shares of this will be written. The following instructions run this code.
 At the argument "--filepath " give the path of the file containing shares from build_deb.... folder
 Server-0
 ./bin/tensor_gt_relu --my-id 0 --party 0,::1,7002 --party 1,::1,7000 --arithmetic-protocol beavy
---boolean-protocol yao --fractional-bits 13 --filepath file_config_input0
+--boolean-protocol yao --fractional-bits 13 --filepath file_config_input0 --current-path
+${BASE_DIR}/build_debwithrelinfo_gcc
 
 Server-1
 ./bin/tensor_gt_relu --my-id 1 --party 0,::1,7002 --party 1,::1,7001 --arithmetic-protocol beavy
 --boolean-protocol yao --repetitions 1 --fractional-bits 13 --filepath file_config_input1
+--current-path ${BASE_DIR}/build_debwithrelinfo_gcc
 */
 // MIT License
 //
@@ -66,7 +68,7 @@ Server-1
 #include "tensor/tensor.h"
 #include "tensor/tensor_op.h"
 #include "tensor/tensor_op_factory.h"
-#include "utility/fixed_point.h"
+#include "utility/new_fixed_point.h"
 
 void testMemoryOccupied(bool WriteToFiles, int my_id, std::string path) {
   int tSize = 0, resident = 0, share = 0;
@@ -475,16 +477,16 @@ auto create_composite_circuit(const Options& options, MOTION::TwoPartyTensorBack
 void run_composite_circuit(const Options& options, MOTION::TwoPartyTensorBackend& backend) {
   auto output_future = create_composite_circuit(options, backend);
   backend.run();
-  // if (options.my_id == 1) {
-  //   auto main = output_future.get();
+  if (options.my_id == 1) {
+    auto main = output_future.get();
 
-  //   for (int i = 0; i < main.size(); ++i) {
-  //     long double temp =
-  //         MOTION::fixed_point::decode<uint64_t, long double>(main[i], options.fractional_bits);
+    for (int i = 0; i < main.size(); ++i) {
+      long double temp =
+          MOTION::new_fixed_point::decode<uint64_t, long double>(main[i], options.fractional_bits);
 
-  //     std::cout << temp << " , ";
-  //   }
-  // }
+      std::cout << temp << " , ";
+    }
+  }
 }
 int main(int argc, char* argv[]) {
   // testMemoryOccupied();

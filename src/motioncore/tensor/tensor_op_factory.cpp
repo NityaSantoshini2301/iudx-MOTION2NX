@@ -52,17 +52,14 @@ TensorCP TensorOpFactory::make_arithmetic_64_tensor_input_other(const TensorDime
 }
 
 // share inputs
-std::pair<std::vector<ENCRYPTO::ReusableFiberPromise<IntegerValues<uint32_t>>>, TensorCP >
-TensorOpFactory::make_arithmetic_32_tensor_input_shares(const TensorDimensions&){
-  throw std::logic_error(
-      fmt::format("{} does not support arithmetic 32 bit inputs"));
-
+std::pair<std::vector<ENCRYPTO::ReusableFiberPromise<IntegerValues<uint32_t>>>, TensorCP>
+TensorOpFactory::make_arithmetic_32_tensor_input_shares(const TensorDimensions&) {
+  throw std::logic_error(fmt::format("{} does not support arithmetic 32 bit inputs"));
 }
 
-std::pair<std::vector<ENCRYPTO::ReusableFiberPromise<IntegerValues<uint64_t>>>, TensorCP >
+std::pair<std::vector<ENCRYPTO::ReusableFiberPromise<IntegerValues<uint64_t>>>, TensorCP>
 TensorOpFactory::make_arithmetic_64_tensor_input_shares(const TensorDimensions&) {
-  throw std::logic_error(
-      fmt::format("{} does not support arithmetic 64 bit inputs"));
+  throw std::logic_error(fmt::format("{} does not support arithmetic 64 bit inputs"));
 }
 
 ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint32_t>>
@@ -113,6 +110,12 @@ tensor::TensorCP TensorOpFactory::make_tensor_gemm_op(const tensor::GemmOp&, con
       fmt::format("{} does not support the Gemm operation", get_provider_name()));
 }
 
+tensor::TensorCP TensorOpFactory::make_tensor_hamm_op(const tensor::HammOp&, const tensor::TensorCP,
+                                                      const tensor::TensorCP, std::size_t) {
+  throw std::logic_error(
+      fmt::format("{} does not support the Hamm operation", get_provider_name()));
+}
+
 tensor::TensorCP TensorOpFactory::make_tensor_sqr_op(const tensor::TensorCP, std::size_t) {
   throw std::logic_error(fmt::format("{} does not support the Sqr operation", get_provider_name()));
 }
@@ -145,22 +148,40 @@ tensor::TensorCP TensorOpFactory::make_tensor_negate(const tensor::TensorCP) {
       fmt::format("{} does not support the Negate operation", get_provider_name()));
 }
 
-tensor::TensorCP TensorOpFactory::make_tensor_constMul_op(const tensor::TensorCP,const std::vector<uint64_t>) {
+tensor::TensorCP TensorOpFactory::make_tensor_constMul_op(const tensor::TensorCP,
+                                                          const std::vector<uint64_t>,
+                                                          std::size_t) {
   throw std::logic_error(
       fmt::format("{} does not support the Const Multiplication operation", get_provider_name()));
 }
 
+// Haritha cosnt matrix mult***** (Given model in clear to both parties and data the inform of
+// shares)
+tensor::TensorCP TensorOpFactory::make_tensor_constMatrix_Mul_op(
+    const tensor::GemmOp& gemm_op, const std::vector<uint64_t> W, const tensor::TensorCP X,
+    bool val, const std::size_t fractional_bits) {
+  throw std::logic_error(fmt::format(
+      "{} does not support the Const Matrix Multiplication operation", get_provider_name()));
+}
 
-tensor::TensorCP TensorOpFactory::make_tensor_constAdd_op(const tensor::TensorCP,const uint64_t) {
+tensor::TensorCP TensorOpFactory::make_tensor_constMatrix_Mul_op(
+    const tensor::GemmOp& gemm_op, const tensor::TensorCP X, const std::vector<uint64_t> W,
+    bool val, const std::size_t fractional_bits) {
+  throw std::logic_error(fmt::format(
+      "{} does not support the Const Matrix Multiplication operation", get_provider_name()));
+}
+
+tensor::TensorCP TensorOpFactory::make_tensor_constAdd_op(const tensor::TensorCP,
+                                                          const std::vector<uint64_t>) {
   throw std::logic_error(
       fmt::format("{} does not support the Const Multiplication operation", get_provider_name()));
 }
 
-tensor::TensorCP TensorOpFactory::make_tensor_add_op(const tensor::TensorCP,const tensor::TensorCP) {
+tensor::TensorCP TensorOpFactory::make_tensor_add_op(const tensor::TensorCP,
+                                                     const tensor::TensorCP) {
   throw std::logic_error(
       fmt::format("{} does not support the Tensor addition operation", get_provider_name()));
 }
-
 
 std::vector<tensor::TensorCP> TensorOpFactory::make_tensor_split_op(const tensor::TensorCP) {
   throw std::logic_error(
@@ -168,9 +189,8 @@ std::vector<tensor::TensorCP> TensorOpFactory::make_tensor_split_op(const tensor
 }
 
 tensor::TensorCP TensorOpFactory::make_tensor_gt_op(const tensor::MaxPoolOp&,
-                                                         const tensor::TensorCP) {
-  throw std::logic_error(
-      fmt::format("{} does not support the GT operation", get_provider_name()));
+                                                    const tensor::TensorCP) {
+  throw std::logic_error(fmt::format("{} does not support the GT operation", get_provider_name()));
 }
 
 tensor::TensorCP TensorOpFactory::make_tensor_join_op(const tensor::JoinOp&, const tensor::TensorCP,

@@ -8,6 +8,9 @@ add_executable(cnn_2layer_check cnn_2layer_check.cpp)
 add_executable(sharegen sharegen.cpp)
 add_executable(matrixmultiply_test matrixmultiply_test.cpp)
 
+
+
+
 find_package(Boost COMPONENTS json log program_options REQUIRED)
 
 target_compile_features(readfile PRIVATE cxx_std_20)
@@ -19,6 +22,7 @@ target_compile_features(cnn_2layer PRIVATE cxx_std_20)
 target_compile_features(cnn_2layer_check PRIVATE cxx_std_20)
 target_compile_features(sharegen PRIVATE cxx_std_20)
 target_compile_features(matrixmultiply_test PRIVATE cxx_std_20)
+
 
 target_link_libraries(readfile
     MOTION::motion
@@ -82,3 +86,7 @@ target_link_libraries(matrixmultiply_test
     Boost::log
     Boost::program_options
 )
+
+
+
+
