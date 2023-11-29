@@ -25,8 +25,13 @@ namespace po = boost::program_options;
 using namespace std;
 int frac_bits = 13;
 
-uint64_t indicator(uint64_t num) {
-    return num > 0? 1: 0;
+uint64_t indicator(uint64_t input) {
+    uint64_t msb = (uint64_t)1 << 63;
+    if (input & msb) {
+        return 0;
+    } else {
+       return 8192;
+    }
 }
 
 void swap_(uint64_t &a, uint64_t &b) {
@@ -472,15 +477,15 @@ class CNN {
         print_matrix(cnn_layer1_output, "CNN layer 1 output");
         sigmoid_layer1_output.assign(cnn_layer1_output.size(), 0);
         transform(cnn_layer1_output.begin(), cnn_layer1_output.end(), sigmoid_layer1_output.begin(),
-                  [frac_bits] (auto j)  { return sigmoid(j, frac_bits); });
-        print_matrix(sigmoid_layer1_output, "Sigmoid layer 1 output");
+                  [frac_bits] (auto j)  { return relu(j, frac_bits); });
+        print_matrix(sigmoid_layer1_output, "Relu layer 1 output");
         print_matrix(weights2, "Weights 2");
         cnn_layer2_output = convolution(sigmoid_layer1_output, weights2, {0, 0}, 2, 2, 2, 2, {0, 0, 0, 0}, {1, 1}, 3, 3, false);        
         print_matrix(cnn_layer2_output, "CNN layer 2 output");
         sigmoid_layer2_output.assign(cnn_layer2_output.size(), 0);
         transform(cnn_layer2_output.begin(), cnn_layer2_output.end(), sigmoid_layer2_output.begin(),
-                  [frac_bits] (auto j)  { return sigmoid(j, frac_bits); });
-        print_matrix(sigmoid_layer2_output, "Sigmoid layer 2 output");
+                  [frac_bits] (auto j)  { return relu(j, frac_bits); });
+        print_matrix(sigmoid_layer2_output, "Relu layer 2 output");
         print_matrix(weights3, "Weights 3");
         fully_connected_layer1_output = MOTION::matrix_multiply(1, sigmoid_layer2_output.size(), 2, sigmoid_layer2_output, weights3);
         transform(fully_connected_layer1_output.begin(), fully_connected_layer1_output.end(), fully_connected_layer1_output.begin(),
@@ -524,7 +529,7 @@ class CNN {
         vector<uint64_t>dA2bydZ2(dLbydF.size(), 0);
         uint64_t encoded_one = MOTION::new_fixed_point::encode<std::uint64_t, float>(1, frac_bits);
         for(int i = 0; i < dLbydF.size(); i++) {
-            dA2bydZ2[i] = MOTION::new_fixed_point::decode<std::uint64_t, float>(sigmoid_layer2_output[i] * (encoded_one - sigmoid_layer2_output[i]), frac_bits);
+            dA2bydZ2[i] = indicator(cnn_layer2_output[i]);//MOTION::new_fixed_point::decode<std::uint64_t, float>(sigmoid_layer2_output[i] * (encoded_one - sigmoid_layer2_output[i]), frac_bits);
         }
 
         vector<uint64_t>dLbydZ2(dLbydF.size());
@@ -546,7 +551,7 @@ class CNN {
 
         vector<uint64_t>dA1bydZ1(sigmoid_layer1_output.size(), 0);
         for(int i = 0; i < sigmoid_layer1_output.size(); i++) {
-            dA1bydZ1[i] = MOTION::new_fixed_point::decode<std::uint64_t, float>(sigmoid_layer1_output[i] * (encoded_one - sigmoid_layer1_output[i]), frac_bits);
+            dA1bydZ1[i] = indicator(cnn_layer1_output[i]);//MOTION::new_fixed_point::decode<std::uint64_t, float>(sigmoid_layer1_output[i] * (encoded_one - sigmoid_layer1_output[i]), frac_bits);
         }
 
         transform(std::begin(dLbydA1), std::end(dLbydA1),
@@ -730,7 +735,7 @@ class CNN {
 
 int main(int argc, char* argv[]) {
     auto start = std::chrono::high_resolution_clock::now();
-    int iterations = 2;
+    int iterations = 50;
     int batch_size = 1;
     CNN cnn = CNN();    
     //cnn.initialize_random_weights({2, 2, 8}, {2, 2, 2}, {1, 2, 1}, {2, 2, 1}); //rows, columns, channels, kernels

@@ -1,4 +1,5 @@
-// ./bin/cnn_2layer //3683 - 15000 iterations - 73.6     63% - 1000 iterations  
+// ./bin/cnn_2layer 
+//3683 - 15000 iterations - 73.6     63% - 1000 iterations  
 //Relu - 1000 iterations (73.58) 15000 - 74.78
 #include <algorithm>
 #include <bitset>
@@ -26,8 +27,13 @@ namespace po = boost::program_options;
 using namespace std;
 int frac_bits = 13;
 
-uint64_t indicator(uint64_t num) {
-    return num > 0? 1: 0;
+uint64_t indicator(uint64_t input) {
+    uint64_t msb = (uint64_t)1 << 63;
+    if (input & msb) {
+        return 0;
+    } else {
+       return 8192;
+    }
 }
 
 void swap_(uint64_t &a, uint64_t &b) {
@@ -36,13 +42,30 @@ void swap_(uint64_t &a, uint64_t &b) {
     b = temp;
 }
 
-void print_matrix(vector<uint64_t>input, string text, int start = 0, int end = 0) {
-    cout << text << ": " << endl;
-    if(end == 0) end = input.size();
-    for(int i = start; i < end; i++) {
-        cout << MOTION::new_fixed_point::decode<uint64_t, float>(input[i], frac_bits) << " ";
+uint64_t actual_sigmoid(uint64_t num, int frac_bits) {
+    float decoded_num = MOTION::new_fixed_point::decode<std::uint64_t, float>(num, frac_bits);
+    float sigmoid = 1 / (1 + exp(-1 * decoded_num));
+    return MOTION::new_fixed_point::encode<std::uint64_t, float>(sigmoid, frac_bits);
+}
+
+uint64_t relu(uint64_t input, int frac_bits) {
+    uint64_t msb = (uint64_t)1 << 63;
+    if (input & msb) {
+        return 0;
+    } else {
+       return input;
     }
-    cout << endl;
+}
+
+void print_matrix(vector<uint64_t>input, string text, bool print = false, int start = 0, int end = 0) {
+    if(print) {
+        cout << text << ": " << endl;
+        if(end == 0) end = input.size();
+        for(int i = start; i < end; i++) {
+            cout << MOTION::new_fixed_point::decode<uint64_t, float>(input[i], frac_bits) << " ";
+        }
+        cout << endl;
+    }
 }
 
 vector<vector<uint64_t>> dilate_matrix(vector<vector<uint64_t>>kernel_segments, int channels, int kernels, vector<int> strides, int rows, int cols) {
@@ -307,20 +330,22 @@ uint64_t sigmoid(uint64_t dot_product, int frac_bits) {
     }
 }
 
-uint64_t actual_sigmoid(uint64_t num, int frac_bits) {
-    float decoded_num = MOTION::new_fixed_point::decode<std::uint64_t, float>(num, frac_bits);
-    float sigmoid = 1 / (1 + exp(-1 * decoded_num));
-    return MOTION::new_fixed_point::encode<std::uint64_t, float>(sigmoid, frac_bits);
-}
-
-uint64_t relu(uint64_t input, int frac_bits) {
-    uint64_t msb = (uint64_t)1 << 63;
-    if (input & msb) {
-        return 0;
-    } else {
-       return input;
+void add_bias(vector<uint64_t>&cnn_output, vector<uint64_t>bias) {
+    int channel_size = cnn_output.size() / bias.size();
+    for(int i = 0; i < cnn_output.size(); i++) {
+        cnn_output[i] += bias[(int)i / channel_size];
     }
 }
+
+vector<uint64_t> bias_gradients(vector<uint64_t>dLbydZ, int num_channels) {
+    int channel_size = dLbydZ.size() / num_channels;
+    vector<uint64_t>dLbydB(num_channels, 0);
+    for(int i = 0; i < dLbydZ.size(); i++) {
+        dLbydB[(int)i / channel_size] += dLbydZ[i]; 
+    }
+    return dLbydB;
+}
+
 
 class CNN {
     public:
@@ -328,12 +353,21 @@ class CNN {
     vector<uint64_t>weights1;
     vector<uint64_t>weights2;
     vector<uint64_t>weights3;
+    vector<uint64_t>bias1;
+    vector<uint64_t>bias2;
+    vector<uint64_t>bias3;
     vector<uint64_t>dLbydW1;
     vector<uint64_t>dLbydW2;
     vector<uint64_t>dLbydW3;
     vector<vector<uint64_t>>dLbydW1_batches;
     vector<vector<uint64_t>>dLbydW2_batches;
     vector<vector<uint64_t>>dLbydW3_batches;
+    vector<uint64_t>dLbydB1;
+    vector<uint64_t>dLbydB2;
+    vector<uint64_t>dLbydB3;
+    vector<vector<uint64_t>>dLbydB1_batches;
+    vector<vector<uint64_t>>dLbydB2_batches;
+    vector<vector<uint64_t>>dLbydB3_batches;
     vector<uint64_t>target;
     vector<uint64_t>cnn_layer1_output;
     vector<uint64_t>sigmoid_layer1_output;
@@ -346,17 +380,11 @@ class CNN {
     int target_label;
     int batch_size;
 
-    vector<int>weight_rows, weight_cols, weight_channels, weight_kernels;
-
     void set_batch_size(int size) {
         batch_size = size;
     }
 
     void initialize_random_weights(vector<int>rows, vector<int>cols, vector<int>channels, vector<int>kernels) {
-        weight_rows = rows;
-        weight_cols = cols;
-        weight_channels = channels;
-        weight_kernels = kernels;
         weights1.assign(rows[0] * cols[0] * channels[0] * kernels[0], 0);
         weights2.assign(rows[1] * cols[1] * channels[1] * kernels[1], 0);
         weights3.assign(rows[2] * cols[2] * channels[2] * kernels[2], 0);
@@ -364,7 +392,7 @@ class CNN {
             random_device rd; 
             mt19937 gen(rd()); 
             uint64_t minNumber = 0;
-            uint64_t maxNumber = 8192;
+            uint64_t maxNumber = MOTION::new_fixed_point::encode<uint64_t, float>(0.25, 13);
             uniform_int_distribution<uint64_t> distribution(minNumber, maxNumber);
             for(int j = 0; j < rows[i] * cols[i] * channels[i] * kernels[i]; j++) {   
                 int x = distribution(gen);
@@ -374,6 +402,29 @@ class CNN {
                     weights2[j] = x;
                 } else if(i == 2) {
                     weights3[j] = x;
+                }
+            }
+        }
+    }
+
+    void initialize_random_biases(vector<int>rows, vector<int>cols, vector<int>channels, vector<int>kernels) {
+        bias1.assign(rows[0] * cols[0] * channels[0] * kernels[0], 0);
+        bias2.assign(rows[1] * cols[1] * channels[1] * kernels[1], 0);
+        bias3.assign(rows[2] * cols[2] * channels[2] * kernels[2], 0);
+        for(int i = 0; i < 3; i++) {
+            random_device rd; 
+            mt19937 gen(rd()); 
+            uint64_t minNumber = 0;
+            uint64_t maxNumber = MOTION::new_fixed_point::encode<uint64_t, float>(1, 13);
+            uniform_int_distribution<uint64_t> distribution(minNumber, maxNumber);
+            for(int j = 0; j < rows[i] * cols[i] * channels[i] * kernels[i]; j++) {   
+                int x = distribution(gen);
+                if(i == 0) {
+                    bias1[j] = x;
+                } else if(i == 1) {
+                    bias2[j] = x;
+                } else if(i == 2) {
+                    bias3[j] = x;
                 }
             }
         }
@@ -432,32 +483,43 @@ class CNN {
     }
 
     void forward_pass() {
-        //print_matrix(image, "Image");
-        //print_matrix(weights1, "Weights 1");
-        cnn_layer1_output = convolution(image, weights1, {0, 0, 0, 0, 0}, 5, 1, 5, 5, {1, 1, 0, 0}, {2, 2}, 28, 28, false);
-        //print_matrix(cnn_layer1_output, "CNN layer 1 output");
+        print_matrix(image, "Image");
+        print_matrix(weights1, "Weights 1", true, 0, 50);
+        cnn_layer1_output = convolution(image, weights1, bias1, 5, 1, 5, 5, {1, 1, 0, 0}, {2, 2}, 28, 28, false);
+        print_matrix(cnn_layer1_output, "CNN layer 1 output");
+        print_matrix(bias1, "Bias 1");
+        //add_bias(cnn_layer1_output, bias1);
+        print_matrix(cnn_layer1_output, "CNN layer 1 output after bias addition");
         sigmoid_layer1_output.assign(cnn_layer1_output.size(), 0);
         transform(cnn_layer1_output.begin(), cnn_layer1_output.end(), sigmoid_layer1_output.begin(),
                   [frac_bits] (auto j)  { return relu(j, frac_bits); });
-        //print_matrix(sigmoid_layer1_output, "Sigmoid layer 1 output");
-        //print_matrix(weights2, "Weights2");
-        cnn_layer2_output = convolution(sigmoid_layer1_output, weights2, {0, 0, 0, 0}, 4, 5, 3, 3, {0, 0, 0, 0}, {1, 1}, 13, 13, false);        
-        //print_matrix(cnn_layer2_output, "CNN layer 2 output");
+        print_matrix(sigmoid_layer1_output, "Sigmoid layer 1 output");
+        print_matrix(weights2, "Weights2", false, 0, 50);
+        cnn_layer2_output = convolution(sigmoid_layer1_output, weights2, bias2, 4, 5, 3, 3, {0, 0, 0, 0}, {1, 1}, 13, 13, false);        
+        print_matrix(cnn_layer2_output, "CNN layer 2 output");
+        print_matrix(bias2, "Bias 2");
+        //add_bias(cnn_layer2_output, bias2);
+        print_matrix(cnn_layer2_output, "CNN layer 2 output after bias addition");
         sigmoid_layer2_output.assign(cnn_layer2_output.size(), 0);
         transform(cnn_layer2_output.begin(), cnn_layer2_output.end(), sigmoid_layer2_output.begin(),
                   [frac_bits] (auto j)  { return relu(j, frac_bits); });
-        //print_matrix(sigmoid_layer2_output, "Sigmoid layer 2 output");
+        print_matrix(sigmoid_layer2_output, "Sigmoid layer 2 output");
         fully_connected_layer1_output = MOTION::matrix_multiply(1, sigmoid_layer2_output.size(), 10, sigmoid_layer2_output, weights3);
-        //print_matrix(weights3, "Weights3");
+        print_matrix(weights3, "Weights3", false, 0, 50);
         transform(fully_connected_layer1_output.begin(), fully_connected_layer1_output.end(), fully_connected_layer1_output.begin(),
                  [frac_bits](auto j) {
                    return MOTION::new_fixed_point::decode<std::uint64_t, float>(j, frac_bits);
                  }); 
-        //print_matrix(fully_connected_layer1_output, "Fully connected layer 1 output");
+        print_matrix(fully_connected_layer1_output, "Fully connected layer 1 output");
+        print_matrix(bias3, "Bias 3");
+        for(int i = 0; i < fully_connected_layer1_output.size(); i++) {
+            fully_connected_layer1_output[i] += bias3[i];
+        }
+        print_matrix(fully_connected_layer1_output, "Fully connected layer 1 output after bias addition");
         sigmoid_layer3_output.assign(fully_connected_layer1_output.size(), 0);
         transform(fully_connected_layer1_output.begin(), fully_connected_layer1_output.end(), sigmoid_layer3_output.begin(),
                   [frac_bits] (auto j)  { return sigmoid(j, frac_bits); });       
-        //print_matrix(sigmoid_layer3_output, "Sigmoid layer 3 output");
+        print_matrix(sigmoid_layer3_output, "Sigmoid layer 3 output");
         output = sigmoid_layer3_output;
     }
 
@@ -468,12 +530,14 @@ class CNN {
         for(int i = 0; i < target.size(); i++) {
             diff.push_back(output[i] - target[i]);
         }
+        dLbydB3 = diff;
+        print_matrix(dLbydB3, "dLbydB3");
         dLbydW3 = MOTION::matrix_multiply(sigmoid_layer2_output.size(), 1, 10, sigmoid_layer2_output, diff);
         transform(dLbydW3.begin(), dLbydW3.end(), dLbydW3.begin(),
             [frac_bits](auto j) {
                 return MOTION::new_fixed_point::decode<std::uint64_t, float>(j, frac_bits);
             });
-        print_matrix(dLbydW3, "dLbydW3", 0, 50);
+        print_matrix(dLbydW3, "dLbydW3", false, 0, 50);
         vector<uint64_t>weights3_transpose;
         for (int i = 0; i < 10; i++) {
             for (int j = 0; j < sigmoid_layer2_output.size(); j++) {
@@ -489,9 +553,9 @@ class CNN {
         vector<uint64_t>dA2bydZ2(dLbydF.size(), 0);
         uint64_t encoded_one = MOTION::new_fixed_point::encode<std::uint64_t, float>(1, frac_bits);
         for(int i = 0; i < dLbydF.size(); i++) {
-            dA2bydZ2[i] = sigmoid_layer2_output[i] > 0? 1: 0;//MOTION::new_fixed_point::decode<std::uint64_t, float>(sigmoid_layer2_output[i] * (encoded_one - sigmoid_layer2_output[i]), frac_bits);
+            dA2bydZ2[i] = indicator(cnn_layer2_output[i]);//MOTION::new_fixed_point::decode<std::uint64_t, float>(sigmoid_layer2_output[i] * (encoded_one - sigmoid_layer2_output[i]), frac_bits);
         }
-
+        print_matrix(dA2bydZ2, "dA2bydZ2");
         vector<uint64_t>dLbydZ2(dLbydF.size());
         transform(std::begin(dLbydF), std::end(dLbydF),
                     std::begin(dA2bydZ2), std::begin(dLbydZ2),
@@ -501,17 +565,18 @@ class CNN {
                  [frac_bits](auto j) {
                    return MOTION::new_fixed_point::decode<std::uint64_t, float>(j, frac_bits);
                  });
-
+        dLbydB2 = bias_gradients(dLbydZ2, bias2.size());
+        print_matrix(dLbydB2, "dLbydB2");
         dLbydW2 = weights_multi_channel_convolution(sigmoid_layer1_output, dLbydZ2, 5, 4, 3, 3, {0, 0, 0, 0}, {1, 1}, 13, 13, false);
-        print_matrix(dLbydW2, "dLbydW2", 0, 50);
+        print_matrix(dLbydW2, "dLbydW2", false, 0, 50);
         vector<uint64_t>dLbydA1 = input_multi_channel_convolution(dLbydZ2, weights2, 4, 5, 3, 3, {0, 0, 0, 0}, {1, 1}, 11, 11, false);
-        //print_matrix(dLbydA1, "dLbydA1");
+        print_matrix(dLbydA1, "dLbydA1");
         vector<uint64_t>dLbydZ1(dLbydA1.size());
         vector<uint64_t>dA1bydZ1(sigmoid_layer1_output.size(), 0);
         for(int i = 0; i < sigmoid_layer1_output.size(); i++) {
-            dA1bydZ1[i] = sigmoid_layer1_output[i] > 0? 1: 0;//MOTION::new_fixed_point::decode<std::uint64_t, float>(sigmoid_layer1_output[i] * (encoded_one - sigmoid_layer1_output[i]), frac_bits);
+            dA1bydZ1[i] = indicator(cnn_layer1_output[i]);//MOTION::new_fixed_point::decode<std::uint64_t, float>(sigmoid_layer1_output[i] * (encoded_one - sigmoid_layer1_output[i]), frac_bits);
         }
-        //print_matrix(dA1bydZ1, "dA1bydZ1");
+        print_matrix(dA1bydZ1, "dA1bydZ1");
         transform(std::begin(dLbydA1), std::end(dLbydA1),
                     std::begin(dA1bydZ1), std::begin(dLbydZ1),
                     std::multiplies{});
@@ -520,15 +585,24 @@ class CNN {
                  [frac_bits](auto j) {
                    return MOTION::new_fixed_point::decode<std::uint64_t, float>(j, frac_bits);
                  });
-        //print_matrix(dLbydZ1, "dLbydZ1");
+        print_matrix(dLbydZ1, "dLbydZ1");
+        dLbydB1 = bias_gradients(dLbydZ1, bias1.size());
+        print_matrix(dLbydB1, "dLbydB1");
+
         dLbydW1 = convolution(image, dLbydZ1, {0, 0, 0, 0, 0}, 5, 1, 13, 13, {1, 1, 0, 0}, {2, 2}, 28, 28, true); 
-        print_matrix(dLbydW1, "dLbydW1", 0, 50);
+        print_matrix(dLbydW1, "dLbydW1", true, 0, 50);
     }
 
     void update_weights() {
         dLbydW1_batches.push_back(dLbydW1);           
         dLbydW2_batches.push_back(dLbydW2);
         dLbydW3_batches.push_back(dLbydW3);
+    }
+
+    void update_biases() {
+        dLbydB1_batches.push_back(dLbydB1);           
+        dLbydB2_batches.push_back(dLbydB2);
+        dLbydB3_batches.push_back(dLbydB3);
     }
 
     void update_batch_weights() {
@@ -601,6 +675,83 @@ class CNN {
         dLbydW3_batches.clear();
     }
 
+    void update_batch_biases() {
+        vector<uint64_t>dLbydB1_avg(dLbydB1_batches[0].size(), (uint64_t)0);
+        vector<uint64_t>dLbydB2_avg(dLbydB2_batches[0].size(), (uint64_t)0);  
+        vector<uint64_t>dLbydB3_avg(dLbydB3_batches[0].size(), (uint64_t)0);  
+        print_matrix(dLbydB1_avg, "dLbydB1_avg");
+        for(int c = 0; c < dLbydB1_batches[0].size(); c++) {
+            for(int r = 0; r < dLbydB1_batches.size(); r++) {
+                dLbydB1_avg[c] += dLbydB1_batches[r][c];
+            }
+        }
+        
+        for(int c = 0; c < dLbydB2_batches[0].size(); c++) {
+            for(int r = 0; r < dLbydB2_batches.size(); r++) {
+                dLbydB2_avg[c] += dLbydB2_batches[r][c];
+            }
+        }
+
+        for(int c = 0; c < dLbydB3_batches[0].size(); c++) {
+            for(int r = 0; r < dLbydB3_batches.size(); r++) {
+                dLbydB3_avg[c] += dLbydB3_batches[r][c];
+            }
+        }
+
+        print_matrix(dLbydB1_batches[0], "dLbydB1[0]");
+        print_matrix(dLbydB1_avg, "dLbydB1_avg");
+
+        uint64_t rate = MOTION::new_fixed_point::encode<std::uint64_t, float>(0.0005 / batch_size, 13);
+        transform(dLbydB3_avg.begin(), dLbydB3_avg.end(),
+                        dLbydB3_avg.begin(), [rate](auto j) { return rate * j; 
+                        });
+        transform(dLbydB3_avg.begin(), dLbydB3_avg.end(),
+                        dLbydB3_avg.begin(), [frac_bits](auto j) {
+                        return MOTION::new_fixed_point::decode<std::uint64_t, float>(j, frac_bits);
+                        });
+
+        print_matrix(dLbydB1_avg, "dLbydB1_avg * rate");
+
+        vector<std::uint64_t> new_bias3(bias3.size(), (uint64_t)0);
+        transform(bias3.begin(), bias3.end(), dLbydB3_avg.begin(),
+                        new_bias3.begin(), std::minus{});
+        for(int i = 0; i < new_bias3.size(); i++)
+        {
+            bias3[i] = new_bias3[i];
+        }
+
+        transform(dLbydB2_avg.begin(), dLbydB2_avg.end(),
+                        dLbydB2_avg.begin(), [rate](auto j) { return rate * j; });
+        transform(dLbydB2_avg.begin(), dLbydB2_avg.end(),
+                        dLbydB2_avg.begin(), [frac_bits](auto j) {
+                        return MOTION::new_fixed_point::decode<std::uint64_t, float>(j, frac_bits);
+                        });
+        vector<std::uint64_t> new_bias2(bias2.size(), (uint64_t)0);
+        transform(bias2.begin(), bias2.end(), dLbydB2_avg.begin(),
+                        new_bias2.begin(), std::minus{});
+        for(int i=0;i<new_bias2.size();i++)
+        {
+            bias2[i]=new_bias2[i];
+        }
+
+        transform(dLbydB1_avg.begin(), dLbydB1_avg.end(),
+                        dLbydB1_avg.begin(), [rate](auto j) { return rate * j; });
+        transform(dLbydB1_avg.begin(), dLbydB1_avg.end(),
+                        dLbydB1_avg.begin(), [frac_bits](auto j) {
+                        return MOTION::new_fixed_point::decode<std::uint64_t, float>(j, frac_bits);
+                        });
+        vector<std::uint64_t> new_bias1(bias1.size(), (uint64_t)0);
+        transform(bias1.begin(), bias1.end(), dLbydB1_avg.begin(),
+                        new_bias1.begin(), std::minus{});
+        for(int i = 0; i < new_bias1.size(); i++)
+        {
+            bias1[i] = new_bias1[i];
+        }
+        dLbydB1_batches.clear();           
+        dLbydB2_batches.clear();
+        dLbydB3_batches.clear();
+    }
+
     int get_test_input(int i) {
         string home_dir = getenv("BASE_DIR");
         ifstream file;
@@ -638,7 +789,7 @@ class CNN {
 
     int get_prediction() {
         vector<float>decoded_output(output.size());
-        //print_matrix(output, "Output");
+        print_matrix(output, "Output");
         transform(output.begin(), output.end(), decoded_output.begin(), [](auto j) {
             return MOTION::new_fixed_point::decode<uint64_t, float>(j, 13);
         });
@@ -650,7 +801,6 @@ class CNN {
                 argmax = i;
             }
         }
-        //cout << argmax;
         return argmax;
     }
 
@@ -695,26 +845,29 @@ class CNN {
 
 int main(int argc, char* argv[]) {
     auto start = std::chrono::high_resolution_clock::now();
-    int iterations = 5;
-    int batch_size = 10;
+    int iterations = 20;
+    int batch_size = 1;
     CNN cnn = CNN();    
     cnn.initialize_random_weights({5, 3, 484}, {5, 3, 10}, {1, 5, 1}, {5, 4, 1}); //rows, columns, channels, kernels
+    cnn.initialize_random_biases({1, 1, 1}, {5, 4, 10}, {1, 1, 1}, {1, 1, 1}); //rows, columns, channels, kernels
     cnn.set_batch_size(batch_size);
     for(int i = 0; i < iterations; i++) {
-        if(i % 1 == 0) cout << "\nIteration: " << i << endl;
+        if(i % 10 == 0) cout << "\nIteration: " << i << endl;
         for(int j = 0; j < batch_size; j++) {
             cnn.get_input(i);
             cnn.get_target(i);
             cnn.forward_pass();
             cnn.backward_pass();
             cnn.update_weights();
+            cnn.update_biases();
         }
         cnn.update_batch_weights();
+        cnn.update_batch_biases();
     }
-    cnn.save_weights("5 iterations with 20 batch size and relu, relu, sigmoid");
+    //cnn.save_weights("5 iterations with 20 batch size and relu, relu, sigmoid");
     cout << "Testing: " << endl;
     int accuracy = 0;
-    for(int i = 1; i < 5000; i++) {
+    for(int i = 1; i < 0; i++) {
         int test_label = cnn.get_test_input(i);
         cnn.forward_pass();
         int prediction = cnn.get_prediction();
